@@ -1,0 +1,2 @@
+img_id,source,question,gt_answer,predicted,correct,time_s
+cla820gl0s3nv071u4fgd7xgq,Ulcerative Colitis,What is the size of the polyp?,none,1.5 cm,False,0.27
