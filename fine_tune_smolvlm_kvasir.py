@@ -113,11 +113,10 @@ else:
 print(f"✅ Train: {len(train_ds)} | Eval: {len(eval_ds)}")
 
 
-# %%
-def preprocess_vqa(examples):
+def preprocess_vqa_no_padding(examples):
     """
-    Moves your collate_fn logic here to run ONCE and cache to disk.
-    """
+#     Moves your collate_fn logic here to run ONCE and cache to disk.
+#     """
     images = [[img.convert("RGB")] for img in examples["image"]]
     texts = []
 
@@ -134,16 +133,48 @@ def preprocess_vqa(examples):
         ]
         # Apply chat template
         texts.append(processor.apply_chat_template(messages, tokenize=False))
-
-    # Process images and text into tensors
-    batch_inputs = processor(text=texts, images=images, return_tensors="pt", padding="longest")
     
-    # Create Labels (standard causal LM training)
-    labels = batch_inputs["input_ids"].clone()
-    labels[labels == processor.tokenizer.pad_token_id] = -100
-    batch_inputs["labels"] = labels
+    # CHANGE: Set padding=False here
+    batch_inputs = processor(text=texts, images=images, return_tensors=None, padding=False)
     
+    # Labels = input_ids (the collator will handle the -100 padding later)
+    batch_inputs["labels"] = batch_inputs["input_ids"]
     return batch_inputs
+
+# Re-map the datasets
+train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
+eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
+# %%
+# def preprocess_vqa(examples):
+#     """
+#     Moves your collate_fn logic here to run ONCE and cache to disk.
+#     """
+#     images = [[img.convert("RGB")] for img in examples["image"]]
+#     texts = []
+
+#     for q, a in zip(examples["question"], examples["answer"]):
+#         messages = [
+#             {
+#                 "role": "user",
+#                 "content": [{"type": "image"}, {"type": "text", "text": q}]
+#             },
+#             {
+#                 "role": "assistant",
+#                 "content": [{"type": "text", "text": a}]
+#             }
+#         ]
+#         # Apply chat template
+#         texts.append(processor.apply_chat_template(messages, tokenize=False))
+
+#     # Process images and text into tensors
+#     batch_inputs = processor(text=texts, images=images, return_tensors="pt", padding="longest")
+    
+#     # Create Labels (standard causal LM training)
+#     labels = batch_inputs["input_ids"].clone()
+#     labels[labels == processor.tokenizer.pad_token_id] = -100
+#     batch_inputs["labels"] = labels
+    
+#     return batch_inputs
 
 print("Preprocessing and caching dataset to hard drive...")
 # We remove columns to keep RAM lean; only pre-computed tensors will remain
