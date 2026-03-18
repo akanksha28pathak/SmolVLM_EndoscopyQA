@@ -15,8 +15,11 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from trl import SFTTrainer
 import gc
+from transformers import Trainer, DataCollatorForSeq2Seq
 
-# ── 1. CONFIG ─────────────────────────────────────────────
+os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
+
+#%% ── 1. CONFIG ─────────────────────────────────────────────
 MODEL_ID   = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
 OUTPUT_DIR = "./smolvlm2-kvasir-finetuned"
 
@@ -40,7 +43,7 @@ print("\n📦 Loading processor...")
 processor = AutoProcessor.from_pretrained(MODEL_ID)
 
 
-# ── 3. LOAD MODEL IN 4-BIT (QLoRA) ────────────────────────
+#%% ── 3. LOAD MODEL IN 4-BIT (QLoRA) ────────────────────────
 # QLoRA = load model in 4-bit quantization, then add LoRA adapters on top
 # This uses ~5GB VRAM instead of ~14GB — perfect for your RTX 5080
 
@@ -62,8 +65,6 @@ model = AutoModelForImageTextToText.from_pretrained(
 # Prepare model for QLoRA training
 model = prepare_model_for_kbit_training(model)
 print("✅ Model loaded in 4-bit!")
-
-# %%
 
 
 # %%
@@ -94,9 +95,8 @@ lora_config = LoraConfig(
 
 # Expected output: ~1-2% of total params are trainable
 
-# %%
 
-# ── 5. LOAD & PREPARE KVASIR-VQA DATASET ──────────────────
+#%% ── 5. LOAD & PREPARE KVASIR-VQA DATASET ──────────────────
 print("\n📂 Loading Kvasir-VQA dataset...")
 ds = load_dataset("SimulaMet-HOST/Kvasir-VQA")["raw"]
 
@@ -112,11 +112,11 @@ else:
 
 print(f"✅ Train: {len(train_ds)} | Eval: {len(eval_ds)}")
 
-
+#%%
 def preprocess_vqa_no_padding(examples):
     """
-#     Moves your collate_fn logic here to run ONCE and cache to disk.
-#     """
+     Moves your collate_fn logic here to run ONCE and cache to disk.
+     """
     images = [[img.convert("RGB")] for img in examples["image"]]
     texts = []
 
@@ -140,11 +140,11 @@ def preprocess_vqa_no_padding(examples):
     # Labels = input_ids (the collator will handle the -100 padding later)
     batch_inputs["labels"] = batch_inputs["input_ids"]
     return batch_inputs
-
+#%%
 # Re-map the datasets
 train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
 eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-# %%
+# %% previous tokenizer
 # def preprocess_vqa(examples):
 #     """
 #     Moves your collate_fn logic here to run ONCE and cache to disk.
@@ -210,7 +210,7 @@ training_args = TrainingArguments(
     remove_unused_columns=False, 
 )
 
-# %%
+# %% some checks to make sure everything is in order before training
 print(f"Dataset columns: {eval_ds.column_names}")
 
 # Standard VLM expected keys:
@@ -239,7 +239,13 @@ decoded_labels = processor.decode(labels, skip_special_tokens=False)
 print(f"Target Answer (Labels): {decoded_labels}")
 
 # %%
-from transformers import DataCollatorForSeq2Seq
+# Prepare model for QLoRA training
+model = prepare_model_for_kbit_training(model)
+
+# MISSING STEP: You must wrap the model with the LoRA config!
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters() 
+print("✅ LoRA adapters attached!")
 
 # This is safer than DefaultDataCollator
 data_collator = DataCollatorForSeq2Seq(
@@ -259,7 +265,25 @@ trainer = Trainer(
 )
 
 # %%
+# ── 9. TRAIN ──────────────────────────────────────────────
+print("\n🔥 Starting fine-tuning...")
+print(f"   Model : {MODEL_ID}")
+print(f"   Epochs: {EPOCHS}")
+print(f"   Train : {len(train_ds)} samples")
+print(f"   Batch : {BATCH_SIZE} × {GRAD_ACCUM} grad accum = {BATCH_SIZE * GRAD_ACCUM} effective")
+print()
 
+trainer.train()
+# # ── 10. SAVE FINE-TUNED MODEL ─────────────────────────────
+print("\n💾 Saving fine-tuned LoRA adapter...")
+trainer.save_model(OUTPUT_DIR)
+processor.save_pretrained(OUTPUT_DIR)
+
+
+# # ── 10. SAVE FINE-TUNED MODEL ─────────────────────────────
+# print("\n💾 Saving fine-tuned LoRA adapter...")
+# trainer.save_model(OUTPUT_DIR)
+# processor.save_pretrained(OUTPUT_DIR)
 
 # # ── 6. DATA COLLATOR ──────────────────────────────────────
 # # This function converts each dataset row into model-ready tensors
