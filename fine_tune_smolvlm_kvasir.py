@@ -176,10 +176,10 @@ eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, re
     
 #     return batch_inputs
 
-print("Preprocessing and caching dataset to hard drive...")
-# We remove columns to keep RAM lean; only pre-computed tensors will remain
-train_ds = train_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=train_ds.column_names)
-eval_ds = eval_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
+# print("Preprocessing and caching dataset to hard drive...")
+# # We remove columns to keep RAM lean; only pre-computed tensors will remain
+# train_ds = train_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=train_ds.column_names)
+# eval_ds = eval_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
 
 
 
@@ -249,13 +249,13 @@ data_collator = DataCollatorForSeq2Seq(
     label_pad_token_id=-100        # Ignore padding in loss calculation
 )
 
-trainer = SFTTrainer(
+# Re-initialize the trainer with the new collator
+trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_ds,
     eval_dataset=eval_ds,
-    data_collator=data_collator,    # Use the seq2seq collator
-    peft_config=lora_config,
+    data_collator=data_collator,
 )
 
 # %%
