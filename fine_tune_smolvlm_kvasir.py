@@ -5,6 +5,7 @@
 
 import torch
 import os
+os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
 from datasets import load_dataset
 from transformers import (
     AutoProcessor,
@@ -17,7 +18,7 @@ from trl import SFTTrainer
 import gc
 from transformers import Trainer, DataCollatorForSeq2Seq
 
-os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
+
 
 #%% ── 1. CONFIG ─────────────────────────────────────────────
 MODEL_ID   = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
