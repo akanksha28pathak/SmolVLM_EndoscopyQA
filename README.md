@@ -1,7 +1,7 @@
-🩺 SmolVLM2 Endoscopy VQA Fine-Tuning
+🩺 **SmolVLM2 Endoscopy VQA Fine-Tuning**
 This repository contains the pipeline for fine-tuning SmolVLM2-2.2B-Instruct on the Kvasir-VQA dataset. The goal is to evaluate and improve Vision-Language Model (VLM) performance on medical endoscopic question-answering tasks.
 
-💻 System Configuration
+💻 **System Configuration**
 Training is performed on a high-performance local consumer setup:
 
 GPU: NVIDIA GeForce RTX 5080 (16 GB VRAM)
@@ -10,7 +10,7 @@ RAM: 32 GB DDR5
 
 OS: Windows Subsystem for Linux (WSL2)
 
-🛠️ Environment Setup & Optimization
+🛠️ **Environment Setup & Optimization**
 1. WSL2 Resource Allocation
 By default, WSL2 may limit resource access. To ensure the trainer has enough overhead, create or edit your .wslconfig file:
 
@@ -20,7 +20,6 @@ Create a file named .wslconfig (if it doesn't exist).
 
 Add the following configuration to allocate 24GB of System RAM:
 
-Ini, TOML
 [wsl2]
 memory=24GB
 processors=8
@@ -32,11 +31,12 @@ VLM datasets and checkpoints are large. To prevent the primary C: drive from fil
 Python
 import os
 os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
-🚀 Optimization Strategy
+
+🚀 **Optimization Strategy**
 4-Bit Quantization & BF16
 To fit the model and its gradients into the 16GB VRAM of the RTX 5080, we load the model using BitsAndBytes 4-bit quantization and the BFloat16 (Brain Floating Point) data type. This maintains high precision while significantly reducing the memory footprint.
 
-Data Preprocessing & Caching
+**Data Preprocessing & Caching**
 To maximize GPU throughput and avoid CPU bottlenecks, the dataset is preprocessed and cached to the disk before training starts.
 
 Key Change: We disable padding during the .map() phase (padding=False) and set return_tensors=None. This allows the DataCollator to handle dynamic padding during the training loop, saving significant System RAM.
@@ -66,67 +66,8 @@ def preprocess_vqa_no_padding(examples):
 # Map and Cache
 train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
 eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-📊 Dataset Reference
+
+📊 **Dataset Reference**
 Model: HuggingFaceTB/SmolVLM2-2.2B-Instruct
 
 Dataset: SimulaMet-HOST/Kvasir-VQA
-This repo is designed to study **SmolVLM2-2.2B**  (https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct) response on **The Kvasir-VQA dataset** (https://huggingface.co/datasets/SimulaMet-HOST/Kvasir-VQA)
-
-** System configuration: **
-GPU - NVIDIA GeForce RTX 5080, 16 GB
-RAM - 32 GB
-OS - WSL
-
-Modifications in system settings
-1.  WSL automatically manages GPU memory (VRAM), allowing Linux containers to utilize up to 50% of total host VRAM. So chang VRAM alloted to WSL by following these steps.
-   -Go to Win+R
-   - Enter '.' and open
-   - Make a text file in the folder with name .wslconfig
-   - Paste following into it
-        [wsl2]
-        memory=24GB
-        processors=8
-
-2. Changed the hugging face cache directory to local drive using following command in the python script
-    import os
-    os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
-
-Code-level Tweaks
-- To handle proper GPU-CPU utilization, I preprocessed and cached the training and eval dataset to hard drive at once. This speedups the training.
-
-    Following snippet does this
-    def preprocess_vqa_no_padding(examples):
-        """
-        Moves your collate_fn logic here to run ONCE and cache to disk.
-        """
-        images = [[img.convert("RGB")] for img in examples["image"]]
-        texts = []
-
-        for q, a in zip(examples["question"], examples["answer"]):
-            messages = [
-                {
-                    "role": "user",
-                    "content": [{"type": "image"}, {"type": "text", "text": q}]
-                },
-                {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": a}]
-                }
-            ]
-            # Apply chat template
-            texts.append(processor.apply_chat_template(messages, tokenize=False))
-        
-        # CHANGE: Set padding=False here
-        batch_inputs = processor(text=texts, images=images, return_tensors=None, padding=False)
-        
-        # Labels = input_ids (the collator will handle the -100 padding later)
-        batch_inputs["labels"] = batch_inputs["input_ids"]
-        return batch_inputs
-    #%%
-    # Re-map the datasets
-    train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
-    eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-            
-- Load model in 4-bit quantization with dtype=torch.bfloat16. This is the new format to load and work on LLMs (binary float)
-
--        
