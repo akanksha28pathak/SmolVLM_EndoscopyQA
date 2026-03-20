@@ -1,1 +1,3 @@
 data/
+# Ignore all fine-tuned model outputs and checkpoints
+smolvlm2-kvasir-finetuned/
