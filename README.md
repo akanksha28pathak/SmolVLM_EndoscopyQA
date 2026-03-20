@@ -31,8 +31,7 @@ Restart WSL by running wsl --shutdown in PowerShell.
 2. Storage Management
 VLM datasets and checkpoints are large. To prevent the primary C: drive from filling up, the Hugging Face cache is redirected to a secondary drive:
 
-Python
-'''
+'''Python
 import os
 os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
 '''
@@ -46,6 +45,7 @@ To maximize GPU throughput and avoid CPU bottlenecks, the dataset is preprocesse
 
 Key Change: We disable padding during the .map() phase (padding=False) and set return_tensors=None. This allows the DataCollator to handle dynamic padding during the training loop, saving significant System RAM.
 
+'''
 Python
 def preprocess_vqa_no_padding(examples):
     """
@@ -71,7 +71,7 @@ def preprocess_vqa_no_padding(examples):
 # Map and Cache
 train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
 eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-
+'''
 📊 **Dataset Reference**
 Model: HuggingFaceTB/SmolVLM2-2.2B-Instruct
 
