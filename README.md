@@ -20,17 +20,22 @@ Create a file named .wslconfig (if it doesn't exist).
 
 Add the following configuration to allocate 24GB of System RAM:
 
+'''
 [wsl2]
 memory=24GB
 processors=8
+'''
+
 Restart WSL by running wsl --shutdown in PowerShell.
 
 2. Storage Management
 VLM datasets and checkpoints are large. To prevent the primary C: drive from filling up, the Hugging Face cache is redirected to a secondary drive:
 
 Python
+'''
 import os
 os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
+'''
 
 🚀 **Optimization Strategy**
 4-Bit Quantization & BF16
