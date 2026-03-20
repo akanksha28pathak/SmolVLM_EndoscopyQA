@@ -1,7 +1,10 @@
-🩺 **SmolVLM2 Endoscopy VQA Fine-Tuning**
-This repository contains the pipeline for fine-tuning SmolVLM2-2.2B-Instruct on the Kvasir-VQA dataset. The goal is to evaluate and improve Vision-Language Model (VLM) performance on medical endoscopic question-answering tasks.
+🩺 SmolVLM2 Endoscopy VQA Fine-Tuning
 
-💻 **System Configuration**
+This repository contains the pipeline for fine-tuning SmolVLM2-2.2B-Instruct on the Kvasir-VQA dataset.
+The goal is to evaluate and improve Vision-Language Model (VLM) performance on medical endoscopic question-answering tasks.
+
+💻 System Configuration
+
 Training is performed on a high-performance local consumer setup:
 
 GPU: NVIDIA GeForce RTX 5080 (16 GB VRAM)
@@ -10,43 +13,64 @@ RAM: 32 GB DDR5
 
 OS: Windows Subsystem for Linux (WSL2)
 
-🛠️ **Environment Setup & Optimization**
+🛠️ Environment Setup & Optimization
 1. WSL2 Resource Allocation
-By default, WSL2 may limit resource access. To ensure the trainer has enough overhead, create or edit your .wslconfig file:
 
-Press Win + R, type ., and press Enter.
+By default, WSL2 may limit resource access. To ensure sufficient resources for training:
 
-Create a file named .wslconfig (if it doesn't exist).
+Press Win + R, type . and press Enter
 
-Add the following configuration to allocate 24GB of System RAM:
+Create (or edit) a file named .wslconfig
 
-'''
+Add the following configuration:
+
 [wsl2]
 memory=24GB
 processors=8
-'''
 
-Restart WSL by running wsl --shutdown in PowerShell.
+Restart WSL:
 
+wsl --shutdown
 2. Storage Management
-VLM datasets and checkpoints are large. To prevent the primary C: drive from filling up, the Hugging Face cache is redirected to a secondary drive:
 
-'''Python
+VLM datasets and checkpoints are large. To avoid filling up the C: drive, redirect the Hugging Face cache to another drive:
+
 import os
 os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
-'''
-
-🚀 **Optimization Strategy**
+🚀 Optimization Strategy
 4-Bit Quantization & BF16
-To fit the model and its gradients into the 16GB VRAM of the RTX 5080, we load the model using BitsAndBytes 4-bit quantization and the BFloat16 (Brain Floating Point) data type. This maintains high precision while significantly reducing the memory footprint.
 
-**Data Preprocessing & Caching**
-To maximize GPU throughput and avoid CPU bottlenecks, the dataset is preprocessed and cached to the disk before training starts.
+To fit the model and training pipeline within 16GB VRAM, we use:
 
-Key Change: We disable padding during the .map() phase (padding=False) and set return_tensors=None. This allows the DataCollator to handle dynamic padding during the training loop, saving significant System RAM.
+BitsAndBytes 4-bit quantization
 
-'''
-Python
+BFloat16 (BF16) precision
+
+This combination:
+
+Reduces memory footprint significantly
+
+Maintains strong numerical stability and performance
+
+⚙️ Data Preprocessing & Caching
+
+To maximize GPU utilization and avoid CPU bottlenecks:
+
+Dataset is preprocessed and cached before training
+
+Padding is disabled during .map()
+
+Dynamic padding is handled later by the DataCollator
+
+🔑 Key Optimization
+
+padding=False
+
+return_tensors=None
+
+This reduces memory usage and keeps cache size manageable.
+
+📌 Preprocessing Function
 def preprocess_vqa_no_padding(examples):
     """
     Applies chat templates and processes images for storage.
@@ -62,17 +86,51 @@ def preprocess_vqa_no_padding(examples):
         texts.append(processor.apply_chat_template(messages, tokenize=False))
     
     # Process without padding to keep cache size manageable
-    batch_inputs = processor(text=texts, images=images, return_tensors=None, padding=False)
+    batch_inputs = processor(
+        text=texts,
+        images=images,
+        return_tensors=None,
+        padding=False
+    )
     
-    # Labels match input_ids; the Collator handles -100 masking for padding later
+    # Labels match input_ids; collator will handle padding masking
     batch_inputs["labels"] = batch_inputs["input_ids"]
+    
     return batch_inputs
+📌 Dataset Mapping & Caching
+train_ds = train_ds.map(
+    preprocess_vqa_no_padding,
+    batched=True,
+    batch_size=16,
+    remove_columns=train_ds.column_names
+)
 
-# Map and Cache
-train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
-eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-'''
-📊 **Dataset Reference**
+eval_ds = eval_ds.map(
+    preprocess_vqa_no_padding,
+    batched=True,
+    batch_size=16,
+    remove_columns=eval_ds.column_names
+)
+📊 Dataset & Model References
+
 Model: HuggingFaceTB/SmolVLM2-2.2B-Instruct
 
 Dataset: SimulaMet-HOST/Kvasir-VQA
+
+✅ Summary of Key Design Choices
+
+Efficient training on consumer GPU (16GB VRAM)
+
+Memory optimization via:
+
+4-bit quantization
+
+BF16 precision
+
+Smart preprocessing:
+
+No padding during mapping
+
+Dynamic padding during training
+
+Disk-based caching for scalability
