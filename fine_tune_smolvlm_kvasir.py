@@ -4,16 +4,24 @@
 # ═══════════════════════════════════════════════════════════
 import torch
 import os
+import shutil
 
-# 1. Define and physically create the directory first
 cache_path = "/mnt/d/huggingface_cache"
+datasets_path = os.path.join(cache_path, "datasets")
+
+
 if not os.path.exists(cache_path):
     os.makedirs(cache_path, exist_ok=True)
     print(f"📁 Created missing directory: {cache_path}")
 
-# 2. Set the environment variable
+# If 'datasets' is causing a FileExistsError, it might be a 'stale' mount or a file
+# that looks like a folder. This ensures it's a proper directory.
+if os.path.exists(datasets_path) and not os.path.isdir(datasets_path):
+    os.remove(datasets_path)
+    os.makedirs(datasets_path, exist_ok=True)
+
 os.environ["HF_HOME"] = cache_path
-os.environ["HF_DATASETS_CACHE"] = os.path.join(cache_path, "datasets")
+os.environ["HF_DATASETS_CACHE"] = datasets_path
 
 
 #os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
