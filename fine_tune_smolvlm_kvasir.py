@@ -25,7 +25,7 @@ MODEL_ID   = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
 OUTPUT_DIR = "./smolvlm2-kvasir-finetuned"
 
 # Training settings — tuned for RTX 5080 16GB
-TRAIN_SAMPLES   = 500    # use subset to start; set None for full 58k
+TRAIN_SAMPLES   = 2000    # use subset to start; set None for full 58k
 EVAL_SAMPLES    = 50
 EPOCHS          = 3
 BATCH_SIZE      = 2       # per device
@@ -75,8 +75,8 @@ print("✅ Model loaded in 4-bit!")
 
 print("\n🔧 Applying LoRA adapters...")
 lora_config = LoraConfig(
-    r=16,                    # rank — higher = more capacity, more memory
-    lora_alpha=32,           # scaling factor (usually 2× rank)
+    r=32,                    # rank — higher = more capacity, more memory
+    lora_alpha=64,           # scaling factor (usually 2× rank)
     lora_dropout=0.1,        # dropout for regularization
     target_modules=[         # which layers to apply LoRA to
         "q_proj",            # query projection (attention)
@@ -86,6 +86,8 @@ lora_config = LoraConfig(
         "gate_proj",         # gating (MLP)
         "up_proj",           # up projection (MLP)
         "down_proj",         # down projection (MLP)
+        "embed_tokens", 
+        "lm_head"
     ],
     use_dora=False,          # set True for slightly better quality (slower)
     init_lora_weights="gaussian",
@@ -242,6 +244,10 @@ print(f"Target Answer (Labels): {decoded_labels}")
 # %%
 # Prepare model for QLoRA training
 model = prepare_model_for_kbit_training(model)
+
+# Allow the model to learn new visual features for endoscopy
+for name, param in model.vision_model.named_parameters():
+    param.requires_grad = True
 
 # MISSING STEP: You must wrap the model with the LoRA config!
 model = get_peft_model(model, lora_config)
