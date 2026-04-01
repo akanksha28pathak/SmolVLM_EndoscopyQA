@@ -2,10 +2,21 @@
 # ═══════════════════════════════════════════════════════════
 #  SmolVLM2-2.2B  ×  Kvasir-VQA  —  QLoRA Fine-Tuning
 # ═══════════════════════════════════════════════════════════
-
 import torch
 import os
-os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
+
+# 1. Define and physically create the directory first
+cache_path = "/mnt/d/huggingface_cache"
+if not os.path.exists(cache_path):
+    os.makedirs(cache_path, exist_ok=True)
+    print(f"📁 Created missing directory: {cache_path}")
+
+# 2. Set the environment variable
+os.environ["HF_HOME"] = cache_path
+os.environ["HF_DATASETS_CACHE"] = os.path.join(cache_path, "datasets")
+
+
+#os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
 from datasets import load_dataset
 from transformers import (
     AutoProcessor,
