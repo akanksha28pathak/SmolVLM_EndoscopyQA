@@ -6,6 +6,10 @@ import torch
 import os
 import shutil
 
+# Instead of token = "hf_...", use:
+HF_TOKEN = ""#put your token
+token = os.getenv("HF_TOKEN")
+#
 cache_path = "/mnt/d/huggingface_cache"
 datasets_path = os.path.join(cache_path, "datasets")
 
@@ -87,6 +91,31 @@ model = prepare_model_for_kbit_training(model)
 print("✅ Model loaded in 4-bit!")
 
 
+# ── 3.5 SEARCH AND UNFREEZE VISION ────────────────────────
+# # ── 3.5 SEARCH AND UNFREEZE VISION ────────────────────────
+# print("\n🔍 Identifying Vision Component...")
+
+# # In SmolVLM2, the hierarchy is model -> model -> vision_tower
+# # We check the most likely paths directly
+# vision_tower = None
+
+# if hasattr(model, "vision_tower"):
+#     vision_tower = model.vision_tower
+# elif hasattr(model, "model") and hasattr(model.model, "vision_tower"):
+#     vision_tower = model.model.vision_tower
+# elif hasattr(model, "base_model"):
+#     # If wrapped in PEFT already
+#     if hasattr(model.base_model, "model") and hasattr(model.base_model.model, "vision_tower"):
+#         vision_tower = model.base_model.model.vision_tower
+
+# if vision_tower is not None:
+#     print(f"✅ Found: {type(vision_tower).__name__}. Unfreezing parameters...")
+#     vision_tower.requires_grad_(True) # More efficient way to unfreeze all params
+# else:
+#     print("❌ CRITICAL: Could not locate 'vision_tower'.")
+#     # Debug: show what we DO have
+#     print(f"Top level attributes: {dir(model)[:20]}...") 
+#     import sys; sys.exit(1)
 # %%
 # ── 4. LORA CONFIG ────────────────────────────────────────
 # LoRA adds small trainable matrices to attention layers
@@ -166,42 +195,6 @@ def preprocess_vqa_no_padding(examples):
 # Re-map the datasets
 train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
 eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
-# %% previous tokenizer
-# def preprocess_vqa(examples):
-#     """
-#     Moves your collate_fn logic here to run ONCE and cache to disk.
-#     """
-#     images = [[img.convert("RGB")] for img in examples["image"]]
-#     texts = []
-
-#     for q, a in zip(examples["question"], examples["answer"]):
-#         messages = [
-#             {
-#                 "role": "user",
-#                 "content": [{"type": "image"}, {"type": "text", "text": q}]
-#             },
-#             {
-#                 "role": "assistant",
-#                 "content": [{"type": "text", "text": a}]
-#             }
-#         ]
-#         # Apply chat template
-#         texts.append(processor.apply_chat_template(messages, tokenize=False))
-
-#     # Process images and text into tensors
-#     batch_inputs = processor(text=texts, images=images, return_tensors="pt", padding="longest")
-    
-#     # Create Labels (standard causal LM training)
-#     labels = batch_inputs["input_ids"].clone()
-#     labels[labels == processor.tokenizer.pad_token_id] = -100
-#     batch_inputs["labels"] = labels
-    
-#     return batch_inputs
-
-# print("Preprocessing and caching dataset to hard drive...")
-# # We remove columns to keep RAM lean; only pre-computed tensors will remain
-# train_ds = train_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=train_ds.column_names)
-# eval_ds = eval_ds.map(preprocess_vqa, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
 
 
 
@@ -265,8 +258,9 @@ print(f"Target Answer (Labels): {decoded_labels}")
 model = prepare_model_for_kbit_training(model)
 
 # Allow the model to learn new visual features for endoscopy
-for name, param in model.vision_model.named_parameters():
-    param.requires_grad = True
+#for name, param in model.vision_model.named_parameters():
+# for name, param in model.model.vision_model.named_parameters():
+#     param.requires_grad = True
 
 # MISSING STEP: You must wrap the model with the LoRA config!
 model = get_peft_model(model, lora_config)
