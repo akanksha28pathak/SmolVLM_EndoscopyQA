@@ -1,4 +1,7 @@
 data/
 # Ignore all fine-tuned model outputs and checkpoints
 smolvlm2-kvasir-finetuned/
+smolvlm2-kvasir-finetuned_lastckpt/
 test_notebook.ipynb
+smolvlm2-baseline-results/
+smolvlm2-baseline-results_noguided/
