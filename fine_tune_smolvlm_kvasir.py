@@ -220,6 +220,16 @@ training_args = TrainingArguments(
     logging_steps=10,
     eval_strategy="steps",
     eval_steps=25,
+
+    report_to="tensorboard",
+    logging_dir="./logs/r32",
+    
+    # save the best checkpoint based on eval loss (or your chosen metric)
+    save_strategy="steps",
+    save_steps=25,           # align with eval_steps
+    load_best_model_at_end=True,
+    metric_for_best_model="eval_loss",  # or your custom metric
+    greater_is_better=False,
     
     # Crucial for VLMs
     remove_unused_columns=False, 
@@ -300,154 +310,6 @@ trainer.save_model(OUTPUT_DIR)
 processor.save_pretrained(OUTPUT_DIR)
 
 
-# # ── 10. SAVE FINE-TUNED MODEL ─────────────────────────────
-# print("\n💾 Saving fine-tuned LoRA adapter...")
-# trainer.save_model(OUTPUT_DIR)
-# processor.save_pretrained(OUTPUT_DIR)
 
-# # ── 6. DATA COLLATOR ──────────────────────────────────────
-# # This function converts each dataset row into model-ready tensors
-# # It's called automatically during training for each batch
-
-# def collate_fn(batch):
-#     """
-#     Converts a batch of Kvasir-VQA samples into model inputs.
-#     Each sample: image + question → answer
-#     We format it as a chat message so the model learns
-#     to answer questions about colonoscopy images.
-#     """
-#     images    = []
-#     texts     = []
-
-#     for sample in batch:
-#         image    = sample["image"].convert("RGB")
-#         question = sample["question"]
-#         answer   = sample["answer"]
-
-#         # Format as a conversation: user asks, assistant answers
-#         messages = [
-#             {
-#                 "role": "user",
-#                 "content": [
-#                     {"type": "image"},
-#                     {"type": "text", "text": question}
-#                 ]
-#             },
-#             {
-#                 "role": "assistant",
-#                 "content": [
-#                     {"type": "text", "text": answer}
-#                 ]
-#             }
-#         ]
-
-#         # Apply the chat template to format text correctly
-#         text = processor.apply_chat_template(
-#             messages,
-#             add_generation_prompt=False,  # False during training (answer is included)
-#             tokenize=False,
-#         )
-#         images.append([image])   # processor expects list of images per sample
-#         texts.append(text)
-
-#     # Tokenize everything together (image + text)
-#     batch_inputs = processor(
-#         text=texts,
-#         images=images,
-#         return_tensors="pt",
-#         padding=True,
-#         truncation=False,
-       
-#     )
-
-#     # Labels = input_ids shifted by 1 (standard causal LM training)
-#     # -100 tells the model to ignore padding tokens in loss calculation
-#     labels = batch_inputs["input_ids"].clone()
-#     labels[labels == processor.tokenizer.pad_token_id] = -100
-
-#     batch_inputs["labels"] = labels
-#     return batch_inputs
-
-
-# # ── 7. TRAINING ARGUMENTS ─────────────────────────────────
-# print("\n⚙️  Setting up training arguments...")
-# training_args = TrainingArguments(
-#     output_dir=OUTPUT_DIR,
-
-#     # Training schedule
-#     num_train_epochs=EPOCHS,
-#     per_device_train_batch_size=BATCH_SIZE,
-#     per_device_eval_batch_size=BATCH_SIZE,
-#     gradient_accumulation_steps=GRAD_ACCUM,
-
-#     # Optimizer
-#     learning_rate=LEARNING_RATE,
-#     lr_scheduler_type="cosine",       # gradually reduce LR — better convergence
-#     warmup_steps=0.1,                 # warm up for first 10% of steps
-
-#     # Memory optimizations
-#     gradient_checkpointing=True,      # trade compute for memory — saves ~30% VRAM
-#     bf16=True,                        # bfloat16 training — faster on RTX 5080
-#     optim="paged_adamw_8bit",         # 8-bit AdamW — saves optimizer memory
-
-#     # Evaluation & saving
-#     eval_strategy="steps",
-#     eval_steps=200,
-#     save_strategy="steps",
-#     save_steps=200,
-#     save_total_limit=2,               # only keep last 2 checkpoints
-#     load_best_model_at_end=True,
-
-#     # Logging
-#     logging_steps=50,
-#     report_to="none",                 # set "wandb" if you want experiment tracking
-#     dataloader_num_workers=0,
-#     remove_unused_columns=False,      # important! keeps image column
-# )
-
-
-# # ── 8. TRAINER ────────────────────────────────────────────
-# print("🚀 Initializing trainer...")
-# trainer = SFTTrainer(
-#     model=model,
-#     args=training_args,
-#     train_dataset=train_ds,
-#     eval_dataset=eval_ds,
-#     data_collator=collate_fn,
-#     processing_class=processor,
-#     peft_config=lora_config,
-# )
-
-
-# # ── 9. TRAIN ──────────────────────────────────────────────
-# print("\n🔥 Starting fine-tuning...")
-# print(f"   Model : {MODEL_ID}")
-# print(f"   Epochs: {EPOCHS}")
-# print(f"   Train : {len(train_ds)} samples")
-# print(f"   Batch : {BATCH_SIZE} × {GRAD_ACCUM} grad accum = {BATCH_SIZE * GRAD_ACCUM} effective")
-# print()
-
-# trainer.train()
-
-
-# # ── 10. SAVE FINE-TUNED MODEL ─────────────────────────────
-# print("\n💾 Saving fine-tuned LoRA adapter...")
-# trainer.save_model(OUTPUT_DIR)
-# processor.save_pretrained(OUTPUT_DIR)
-
-# %%
-
-
-# print(f"✅ Fine-tuned adapter saved to: {OUTPUT_DIR}")
-# print("   (Only ~50–100MB saved — just the LoRA adapter weights, not the full model)")
-
-
-# # ── 11. MERGE & SAVE FULL MODEL (optional) ────────────────
-# # If you want a standalone model (no need for base model at inference):
-# print("\n🔀 Merging LoRA adapter into base model...")
-# merged_model = model.merge_and_unload()   # merge adapter → base model
-# merged_model.save_pretrained(f"{OUTPUT_DIR}-merged")
-# processor.save_pretrained(f"{OUTPUT_DIR}-merged")
-# print(f"✅ Merged model saved to: {OUTPUT_DIR}-merged")
 
 
