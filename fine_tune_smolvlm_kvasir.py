@@ -5,56 +5,64 @@
 import torch
 import os
 import shutil
+import time
+import json
+import gc
 
-# Instead of token = "hf_...", use:
-HF_TOKEN = ""#put your token
-token = os.getenv("HF_TOKEN")
-#
+# ── SET ALL PATHS FIRST ───────────────────────────────────
 cache_path = "/mnt/d/huggingface_cache"
 datasets_path = os.path.join(cache_path, "datasets")
+tmp_path      = "/mnt/d/tmp"
+LOG_DIR = "/mnt/d/workspace/Lama_EndoscopyQA/logs/r32"
 
+for path in [cache_path, datasets_path, tmp_path]:
+    os.makedirs(path, exist_ok=True)
 
-if not os.path.exists(cache_path):
-    os.makedirs(cache_path, exist_ok=True)
-    print(f"📁 Created missing directory: {cache_path}")
+os.environ["HF_HOME"]            = cache_path
+os.environ["HF_DATASETS_CACHE"]  = datasets_path
+os.environ["TRANSFORMERS_CACHE"] = os.path.join(cache_path, "transformers")
+os.environ["HF_HUB_CACHE"]       = os.path.join(cache_path, "hub")
+os.environ["TMPDIR"]             = tmp_path
+os.environ["TEMP"]               = tmp_path
+os.environ["TMP"]                = tmp_path   
 
-# If 'datasets' is causing a FileExistsError, it might be a 'stale' mount or a file
-# that looks like a folder. This ensures it's a proper directory.
-if os.path.exists(datasets_path) and not os.path.isdir(datasets_path):
-    os.remove(datasets_path)
-    os.makedirs(datasets_path, exist_ok=True)
+#-----------------------------------
+import datasets
+datasets.disable_caching()
 
-os.environ["HF_HOME"] = cache_path
-os.environ["HF_DATASETS_CACHE"] = datasets_path
-
-
-#os.environ["HF_HOME"] = "/mnt/d/huggingface_cache"
 from datasets import load_dataset
 from transformers import (
     AutoProcessor,
     AutoModelForImageTextToText,
     BitsAndBytesConfig,
     TrainingArguments,
+    TrainerCallback,          # ← add this
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from trl import SFTTrainer
-import gc
 from transformers import Trainer, DataCollatorForSeq2Seq
 
 
+# Instead of token = "hf_...", use:
+HF_TOKEN = #put your token
+token = os.getenv("HF_TOKEN")
+#
 
 #%% ── 1. CONFIG ─────────────────────────────────────────────
 MODEL_ID   = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
-OUTPUT_DIR = "./smolvlm2-kvasir-finetuned"
+OUTPUT_DIR = "/mnt/d/workspace/Lama_EndoscopyQA/smolvlm2-kvasir-finetuned"
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
 
 # Training settings — tuned for RTX 5080 16GB
-TRAIN_SAMPLES   = 2000    # use subset to start; set None for full 58k
-EVAL_SAMPLES    = 50
+TRAIN_SAMPLES   = 5000    # use subset to start; set None for full 58k
+EVAL_SAMPLES    = 100
 EPOCHS          = 3
-BATCH_SIZE      = 2       # per device
-GRAD_ACCUM      = 8       # effective batch = 4 × 4 = 16
+BATCH_SIZE      = 1       # per device
+GRAD_ACCUM      = 16       # effective batch = 4 × 4 = 16
 LEARNING_RATE   = 2e-4
-MAX_SEQ_LEN     = 512
+MAX_SEQ_LEN     = 2048
 
 # %%
 print("=" * 55)
@@ -91,35 +99,6 @@ model = prepare_model_for_kbit_training(model)
 print("✅ Model loaded in 4-bit!")
 
 
-# ── 3.5 SEARCH AND UNFREEZE VISION ────────────────────────
-# # ── 3.5 SEARCH AND UNFREEZE VISION ────────────────────────
-# print("\n🔍 Identifying Vision Component...")
-
-# # In SmolVLM2, the hierarchy is model -> model -> vision_tower
-# # We check the most likely paths directly
-# vision_tower = None
-
-# if hasattr(model, "vision_tower"):
-#     vision_tower = model.vision_tower
-# elif hasattr(model, "model") and hasattr(model.model, "vision_tower"):
-#     vision_tower = model.model.vision_tower
-# elif hasattr(model, "base_model"):
-#     # If wrapped in PEFT already
-#     if hasattr(model.base_model, "model") and hasattr(model.base_model.model, "vision_tower"):
-#         vision_tower = model.base_model.model.vision_tower
-
-# if vision_tower is not None:
-#     print(f"✅ Found: {type(vision_tower).__name__}. Unfreezing parameters...")
-#     vision_tower.requires_grad_(True) # More efficient way to unfreeze all params
-# else:
-#     print("❌ CRITICAL: Could not locate 'vision_tower'.")
-#     # Debug: show what we DO have
-#     print(f"Top level attributes: {dir(model)[:20]}...") 
-#     import sys; sys.exit(1)
-# %%
-# ── 4. LORA CONFIG ────────────────────────────────────────
-# LoRA adds small trainable matrices to attention layers
-# Instead of training 2.2B params, we only train ~30M — much faster!
 
 print("\n🔧 Applying LoRA adapters...")
 lora_config = LoraConfig(
@@ -164,6 +143,14 @@ else:
 print(f"✅ Train: {len(train_ds)} | Eval: {len(eval_ds)}")
 
 #%%
+# ── PROMPT TEMPLATE ───────────────────────────────────────
+SYSTEM_INSTRUCTION = (
+ "You are a medical AI assistant specialized in gastrointestinal endoscopy. "
+    "Analyze the provided endoscopic image carefully and answer the clinical question. "
+    "Answer in keywords or short phrases only. "
+    "Questions based on: anatomical landmarks, pathological findings, instrument presence, image quality"
+    "Examples for answers: '0', 'colonoscopy', 'none', 'yes', 'center'."
+)
 def preprocess_vqa_no_padding(examples):
     """
      Moves your collate_fn logic here to run ONCE and cache to disk.
@@ -173,6 +160,10 @@ def preprocess_vqa_no_padding(examples):
 
     for q, a in zip(examples["question"], examples["answer"]):
         messages = [
+            {
+                "role": "system",                          # ← add system role
+                "content": [{"type": "text", "text": SYSTEM_INSTRUCTION}]
+            },
             {
                 "role": "user",
                 "content": [{"type": "image"}, {"type": "text", "text": q}]
@@ -187,14 +178,35 @@ def preprocess_vqa_no_padding(examples):
     
     # CHANGE: Set padding=False here
     batch_inputs = processor(text=texts, images=images, return_tensors=None, padding=False)
+
     
-    # Labels = input_ids (the collator will handle the -100 padding later)
-    batch_inputs["labels"] = batch_inputs["input_ids"]
+        # ── MASK QUESTION TOKENS ──────────────────────────────
+    labels = []
+    for input_ids in batch_inputs["input_ids"]:
+        label = list(input_ids)
+
+        # Find where assistant response starts
+        # Look for assistant token in the sequence
+        assistant_token_id = processor.tokenizer.convert_tokens_to_ids("<|im_start|>")
+        
+        # Mask everything before the last assistant turn
+        last_assistant_pos = 0
+        for i, token_id in enumerate(label):
+            if token_id == assistant_token_id:
+                last_assistant_pos = i
+
+        # Set question tokens to -100 (ignored in loss)
+        for i in range(last_assistant_pos):
+            label[i] = -100
+
+        labels.append(label)
+
+    batch_inputs["labels"] = labels
     return batch_inputs
 #%%
 # Re-map the datasets
-train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=train_ds.column_names)
-eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=16, remove_columns=eval_ds.column_names)
+train_ds = train_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=8, remove_columns=train_ds.column_names)
+eval_ds = eval_ds.map(preprocess_vqa_no_padding, batched=True, batch_size=8, remove_columns=eval_ds.column_names)
 
 
 
@@ -203,6 +215,7 @@ training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     num_train_epochs=EPOCHS,
     per_device_train_batch_size=BATCH_SIZE,
+    per_device_eval_batch_size=1,          # ← add this, eval uses more memory
     gradient_accumulation_steps=GRAD_ACCUM,
     learning_rate=LEARNING_RATE,
     lr_scheduler_type="cosine",
@@ -219,14 +232,14 @@ training_args = TrainingArguments(
     save_total_limit=1, # Save space in WSL
     logging_steps=10,
     eval_strategy="steps",
-    eval_steps=25,
+    eval_steps=50,
 
     report_to="tensorboard",
-    logging_dir="./logs/r32",
+    logging_dir=LOG_DIR,
     
     # save the best checkpoint based on eval loss (or your chosen metric)
     save_strategy="steps",
-    save_steps=25,           # align with eval_steps
+    save_steps=50,           # align with eval_steps
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",  # or your custom metric
     greater_is_better=False,
@@ -246,37 +259,23 @@ for key in expected_keys:
     else:
         print(f"❌ Missing {key}!")
 
-# %%
-# Grab the first sample
-sample = train_ds[0]
 
-# Decode the input_ids back to text
-decoded_text = processor.decode(sample["input_ids"], skip_special_tokens=False)
 
-print("--- DECODED SAMPLE ---")
-print(decoded_text)
-print("----------------------")
-
-# Check if labels are correctly aligned
-# (Where labels are -100, the model is NOT being graded)
-labels = [l for l in sample["labels"] if l != -100]
-decoded_labels = processor.decode(labels, skip_special_tokens=False)
-print(f"Target Answer (Labels): {decoded_labels}")
 
 # %%
-# Prepare model for QLoRA training
-model = prepare_model_for_kbit_training(model)
-
-# Allow the model to learn new visual features for endoscopy
-#for name, param in model.vision_model.named_parameters():
-# for name, param in model.model.vision_model.named_parameters():
-#     param.requires_grad = True
 
 # MISSING STEP: You must wrap the model with the LoRA config!
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters() 
 print("✅ LoRA adapters attached!")
 
+class ClearCacheCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, **kwargs):
+        """Clear GPU cache before evaluation to free VRAM"""
+        gc.collect()
+        torch.cuda.empty_cache()
+        print(f"\n🧹 GPU cache cleared before eval "
+              f"(Free: {torch.cuda.mem_get_info()[0]/1e9:.1f}GB)")
 # This is safer than DefaultDataCollator
 data_collator = DataCollatorForSeq2Seq(
     tokenizer=processor.tokenizer, # Use the tokenizer from your processor
@@ -292,6 +291,7 @@ trainer = Trainer(
     train_dataset=train_ds,
     eval_dataset=eval_ds,
     data_collator=data_collator,
+    callbacks=[ClearCacheCallback()],      # ← add callback
 )
 
 # %%
@@ -303,13 +303,26 @@ print(f"   Train : {len(train_ds)} samples")
 print(f"   Batch : {BATCH_SIZE} × {GRAD_ACCUM} grad accum = {BATCH_SIZE * GRAD_ACCUM} effective")
 print()
 
+start = time.time()
 trainer.train()
 # # ── 10. SAVE FINE-TUNED MODEL ─────────────────────────────
 print("\n💾 Saving fine-tuned LoRA adapter...")
 trainer.save_model(OUTPUT_DIR)
 processor.save_pretrained(OUTPUT_DIR)
+print(f"Elapsed: {time.time() - start}s")
 
 
 
 
+# Assuming 'total_time' is the variable you calculated earlier
+total_time = round(time.time() - start, 2)
 
+# Save timing to trainer_state.json
+state_path = os.path.join(OUTPUT_DIR, "trainer_state.json")
+if os.path.exists(state_path):
+    with open(state_path, "r") as f:
+        state_data = json.load(f)
+    state_data["total_training_time_seconds"] = total_time
+    with open(state_path, "w") as f:
+        json.dump(state_data, f, indent=2)
+    print(f"💾 Training time saved to trainer_state.json")
