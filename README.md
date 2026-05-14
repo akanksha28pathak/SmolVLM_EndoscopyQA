@@ -19,7 +19,7 @@ Training is performed on a high-performance local consumer setup:
 * [Baseline evalauation](eval_baseline.py): baseline evaluation.
 * [Test finetuned model](test_finetuned_notebook.ipynb): finetuned model evaluation
 * [Training Stats](trainer_state.json): JSON containing loss and eval metrics.
-* [Results] (eval_results.json) : JSON containing results
+* [Results](eval_results.json) : JSON containing results
 
 ## 🛠️ Environment Setup & Optimization
 
