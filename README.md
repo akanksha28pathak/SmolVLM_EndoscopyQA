@@ -18,6 +18,7 @@ Training is performed on a high-performance local consumer setup:
 * [Fine-tuning Script](fine_tune_smolvlm_kvasir.py): Main training logic.
 * [Training Stats](trainer_state.json): JSON containing loss and eval metrics.
 * [Baseline evalauation](eval_baseline.py): baseline evaluation.
+* [Test finetuned model](test_finetuned_notebook.ipynb): finetuned model evaluation
 
 ## 🛠️ Environment Setup & Optimization
 
