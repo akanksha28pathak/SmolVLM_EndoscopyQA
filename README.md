@@ -1,6 +1,6 @@
 # 🩺 SmolVLM2 Endoscopy VQA Fine-Tuning
 
-This repository contains the pipeline for fine-tuning **SmolVLM2-2.2B-Instruct** on the **Kvasir-VQA dataset** ([(PDF)](./SmolVLM_Finetuning_Notebook.pdf).  
+This repository contains the pipeline for fine-tuning **SmolVLM2-2.2B-Instruct** on the **Kvasir-VQA dataset** ([(PDF)](SmolVLM_Finetuning_Notebook.pdf).  
 The goal is to evaluate and improve Vision-Language Model (VLM) performance on **medical endoscopic question-answering tasks**.
 
 ---
