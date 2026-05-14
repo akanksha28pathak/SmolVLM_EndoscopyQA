@@ -7,3 +7,8 @@ smolvlm2-baseline-results/
 smolvlm2-baseline-results_noguided/
 smolvlm2-kvasir-finetuned_2ksamples_besteval/
 copy_test.py
+test_finetuned_model.py
+test_baseline_model.ipynb
+kvasir_vqa_results.csv
+first_note.ipynb
+fine_tune_smolvlm_kvasir.ipynb
