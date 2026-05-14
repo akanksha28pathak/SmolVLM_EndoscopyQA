@@ -4,7 +4,7 @@ This repository contains the pipeline for fine-tuning **SmolVLM2-2.2B-Instruct**
 The goal is to evaluate and improve Vision-Language Model (VLM) performance on **medical endoscopic question-answering tasks**.
 
 ---
-
+![Finetuning Smolvlm-2.2B on Kvasir-VQA](Block_diagram.png)
 
 ## 💻 System Configuration
 
