@@ -14,12 +14,10 @@ Training is performed on a high-performance local consumer setup:
 - **OS:** Windows Subsystem for Linux (WSL2)
 
 ---
-## Fine -tuning Script
-fine_tune_smolvlm_kvasir.py
-## Baseline model evaluation
-test_baselinemodel.ipynb
-## Fine-tuned model testing
-test_notebook.ipynb
+## Project Structure
+* [Fine-tuning Script](fine_tune_smolvlm_kvasir.py): Main training logic.
+* [Training Stats](trainer_state.json): JSON containing loss and eval metrics.
+* [Baseline evalauation](eval_baseline.py): baseline evaluation.
 
 ## 🛠️ Environment Setup & Optimization
 
