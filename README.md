@@ -93,29 +93,32 @@ This reduces memory usage and keeps cache size manageable.
 ```python
 def preprocess_vqa_no_padding(examples):
     """
-    Applies chat templates and processes images for storage.
-    """
+     Moves your collate_fn logic here to run ONCE and cache to disk.
+     """
     images = [[img.convert("RGB")] for img in examples["image"]]
     texts = []
 
     for q, a in zip(examples["question"], examples["answer"]):
         messages = [
-            {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": q}]},
-            {"role": "assistant", "content": [{"type": "text", "text": a}]}
+            {
+                "role": "system",                          # ← add system role
+                "content": [{"type": "text", "text": SYSTEM_INSTRUCTION}]
+            },
+            {
+                "role": "user",
+                "content": [{"type": "image"}, {"type": "text", "text": q}]
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": a}]
+            }
         ]
+        # Apply chat template
         texts.append(processor.apply_chat_template(messages, tokenize=False))
-
-    # Process without padding to keep cache size manageable
-    batch_inputs = processor(
-        text=texts,
-        images=images,
-        return_tensors=None,
-        padding=False
-    )
-
-    # Labels match input_ids; collator will handle padding masking
-    batch_inputs["labels"] = batch_inputs["input_ids"]
-
+    
+    # CHANGE: Set padding=False here
+    batch_inputs = processor(text=texts, images=images, return_tensors=None, padding=False)
+    ....
     return batch_inputs
 ```
 
