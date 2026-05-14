@@ -5,6 +5,7 @@ The goal is to evaluate and improve Vision-Language Model (VLM) performance on *
 
 ---
 
+
 ## 💻 System Configuration
 
 Training is performed on a high-performance local consumer setup:
@@ -20,6 +21,18 @@ Training is performed on a high-performance local consumer setup:
 * [Test finetuned model](test_finetuned_notebook.ipynb): finetuned model evaluation
 * [Training Stats](trainer_state.json): JSON containing loss and eval metrics.
 * [Results](eval_results.json) : JSON containing results
+
+## Results
+### Performance Comparison
+
+| Metric | Baseline | Fine-tuned | Improvement |
+| :--- | :---: | :---: | :---: |
+| **Strict Exact Match** | 0.1756 | **0.8216** | +0.6460 |
+| **ROUGE-1** | 0.2179 | **0.8742** | +0.6563 |
+| **ROUGE-2** | 0.0004 | **0.1792** | +0.1788 |
+| **ROUGE-L** | 0.2179 | **0.8717** | +0.6538 |
+| **BLEU** | 0.0075 | **0.2022** | +0.1947 |
+| **METEOR** | 0.0326 | **0.4993** | +0.4667 |
 
 ## 🛠️ Environment Setup & Optimization
 
