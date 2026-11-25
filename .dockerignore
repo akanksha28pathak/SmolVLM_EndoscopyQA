@@ -1,0 +1,13 @@
+.git
+**/__pycache__
+*.ipynb
+*.pdf
+*.png
+*.json
+data/
+smolvlm2-*/
+space/
+scripts/
+tests/
+environment.yml
+.env
