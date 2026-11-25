@@ -174,3 +174,26 @@ eval_ds = eval_ds.map(
   - No padding during mapping
   - Dynamic padding during training
 - Disk-based caching for scalability
+
+---
+
+## 🚀 Serving: REST API and public demo
+
+| Component | Path | What it does |
+|---|---|---|
+| Shared inference | [`app/inference.py`](app/inference.py) | Loads base model + LoRA once, thread safe `predict()` |
+| REST API + web UI | [`app/main.py`](app/main.py), [`app/static/index.html`](app/static/index.html) | FastAPI: web page at `/`, `GET /health`, `POST /predict`, Swagger at `/docs` |
+| Container | [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml) | CUDA 12.8 PyTorch, GPU passthrough, adapter and HF cache mounted as volumes |
+| Tests | [`tests/test_api.py`](tests/test_api.py) | API tests with a fake model, no GPU needed |
+| Public demo | [`space/`](space/) | Gradio app for Hugging Face Spaces (ZeroGPU) |
+| Model card | [`MODEL_CARD.md`](MODEL_CARD.md) | Training setup, metrics, limitations, license |
+
+```bash
+docker compose up --build
+curl -X POST http://localhost:8000/predict -F "image=@sample.jpg" -F "question=Is there a polyp?"
+# {"question":"Is there a polyp?","answer":"yes","latency_ms":412.3,"model_version":"checkpoint-900", ...}
+```
+
+Full setup steps: [DEPLOY.md](DEPLOY.md)
+
+> ⚠️ Research and educational use only. Not for clinical diagnosis. Kvasir VQA is licensed CC BY NC 4.0.

@@ -1,0 +1,11 @@
+# Serving dependencies (versions match the training environment, torch129)
+# torch is installed separately in the Dockerfile from the CUDA 12.8 wheel index.
+transformers==5.2.0
+peft==0.18.1
+accelerate==1.12.0
+bitsandbytes==0.49.2
+num2words==0.5.14
+pillow
+fastapi==0.162.5
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32

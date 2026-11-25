@@ -1,0 +1,26 @@
+# Run from WSL:  docker compose up --build
+# Then open:     http://localhost:8000/docs
+services:
+  api:
+    build: .
+    image: endoscopy-vqa:latest
+    ports:
+      - "8000:8000"
+    environment:
+      ADAPTER_PATH: /models/adapter
+      MODEL_VERSION: checkpoint-900
+      LOAD_IN_4BIT: "1"
+      MAX_NEW_TOKENS: "16"
+    volumes:
+      # Your fine-tuned LoRA adapter (read only)
+      - ${ADAPTER_DIR:-/mnt/d/workspace/Lama_EndoscopyQA/smolvlm2-kvasir-finetuned/checkpoint-900}:/models/adapter:ro
+      # Reuse your existing Hugging Face cache so the base model is not downloaded again
+      - ${HF_CACHE_DIR:-/mnt/d/huggingface_cache}:/hf_cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
