@@ -12,3 +12,7 @@ test_baseline_model.ipynb
 kvasir_vqa_results.csv
 first_note.ipynb
 fine_tune_smolvlm_kvasir.ipynb
+# Serving
+.env
+__pycache__/
+.pytest_cache/
